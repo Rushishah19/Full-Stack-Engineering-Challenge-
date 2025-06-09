@@ -1,0 +1,95 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Backend Service for Music Festival Lineup
+
+Resources:
+
+  FestivalS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: music-festival-json-upload
+      NotificationConfiguration:
+        QueueConfigurations:
+          - Event: s3:ObjectCreated:*
+            Queue: !GetAtt FestivalQueue.Arn
+
+  FestivalQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: musicFestivalQueue
+
+  FestivalSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: musicFestivalStatus
+
+  FestivalDynamoTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Performances
+      AttributeDefinitions:
+        - AttributeName: Performer
+          AttributeType: S
+        - AttributeName: Date#StartTime
+          AttributeType: S
+      KeySchema:
+        - AttributeName: Performer
+          KeyType: HASH
+        - AttributeName: Date#StartTime
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: LambdaExecutionFestivalRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:BatchWriteItem
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: '*'
+
+  FestivalLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: MusicFestivalLambda
+      Runtime: python3.12
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Handler: lambda_function.lambda_handler
+      Code:
+        S3Bucket: <your-code-bucket>
+        S3Key: lambda_function.zip
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: Performances
+          SNS_TOPIC_ARN: !Ref FestivalSNSTopic
+      Events:
+        SQSTrigger:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt FestivalQueue.Arn

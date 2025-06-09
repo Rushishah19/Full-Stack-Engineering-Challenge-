@@ -1,0 +1,7 @@
+{
+  "Records": [
+    {
+      "body": "{ \"Records\": [{ \"s3\": { \"bucket\": { \"name\": \"music-festival-json-upload\" }, \"object\": { \"key\": \"sample_data.json\" } } }] }"
+    }
+  ]
+}
